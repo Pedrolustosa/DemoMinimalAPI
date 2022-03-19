@@ -1,3 +1,4 @@
+using MiniValidation;
 using DemoMinimalAPI.Data;
 using DemoMinimalAPI.Model;
 using Microsoft.EntityFrameworkCore;
@@ -39,9 +40,17 @@ await context.Providers.FindAsync(id)
 app.MapPost("/provider", async (
     MinimalContextDb context, Provider provider) =>
 {
+    if(!MiniValidator.TryValidate(provider, out var errors))
+        return Results.ValidationProblem(errors);
+
     context.Providers.Add(provider);
     var result = await context.SaveChangesAsync();
-})
+
+    return result > 0
+     //? Results.Created($"/provider/{provider.Id}", provider)
+     ? Results.CreatedAtRoute("GetProviderById", new { id = provider.Id }, provider)
+     : Results.BadRequest("Houve um problema ao salvar");
+})  .ProducesValidationProblem()
     .Produces<Provider>(StatusCodes.Status201Created)
     .Produces(StatusCodes.Status400BadRequest)
     .WithName("PostProvider")
