@@ -2,6 +2,8 @@ using MiniValidation;
 using DemoMinimalAPI.Data;
 using DemoMinimalAPI.Model;
 using Microsoft.EntityFrameworkCore;
+using NetDevPack.Identity;
+using NetDevPack.Identity.Jwt;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +11,13 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<MinimalContextDb>(options => options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+
+builder.Services.AddIdentityEntityFrameworkContextConfiguration(options => 
+        options.UseSqlServer(builder.Configuration.GetConnectionString("Default"),
+        b => b.MigrationsAssembly("DemoMinimalAPI")));
+
+builder.Services.AddIdentityConfiguration();
+builder.Services.AddJwtConfiguration(builder.Configuration, "AppSettings");
 
 var app = builder.Build();
 
@@ -18,6 +27,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseAuthConfiguration();
 app.UseHttpsRedirection();
 
 app.MapGet("/provider", async 
@@ -60,7 +70,8 @@ app.MapPost("/provider", async (
 
 app.MapPut("/provider/{id}", async (Guid id, MinimalContextDb context, Provider provider) =>
 {
-    var providerDB = await context.Providers.FindAsync(id); 
+    var providerDB = await context.Providers.AsNoTracking<Provider>()
+                                            .FirstOrDefaultAsync(f => f.Id == id); 
     if(providerDB == null) return Results.NotFound();
 
     if (!MiniValidator.TryValidate(provider, out var errors))
@@ -84,7 +95,7 @@ app.MapDelete("/provider/{id}", async (Guid id, MinimalContextDb context) =>
     var provider = await context.Providers.FindAsync(id);
     if (provider == null) return Results.NotFound();
 
-    context.Providers.Update(provider);
+    context.Providers.Remove(provider);
     var result = await context.SaveChangesAsync();
 
     return result > 0
